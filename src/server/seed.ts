@@ -4,7 +4,7 @@ import { calcFee, calcPrice, newId, type Ctx } from './core';
 import { codeFingerprint, encryptCode, hashPassword, sha256 } from './crypto';
 import type { Database } from './db';
 import { moveBalance } from './ledger';
-import { queueMail } from './mail';
+import { notify } from './mail';
 import { DEFAULT_SETTINGS, saveSettings } from './settings';
 import { storeImage } from './storage';
 
@@ -36,13 +36,13 @@ export async function seed(db: Database) {
     if (rows[0].n > 0) return false;
     await saveSettings(q, DEFAULT_SETTINGS);
     const ctx: Ctx = { actor: null, ip: '127.0.0.1', ua: 'seed' };
-    const mk = async (o: { email: string; name: string; kana: string; role?: 'admin'; kyc?: 'approved' | 'pending' | 'none'; seller?: 'approved' | 'pending' | 'none'; bank?: [string, string, string]; verified?: boolean }) => {
+    const mk = async (o: { loginId: string; name: string; kana: string; role?: 'admin'; kyc?: 'approved' | 'pending' | 'none'; seller?: 'approved' | 'pending' | 'none'; bank?: [string, string, string] }) => {
       const id = newId('USR');
       const kyc = o.kyc ?? 'approved';
       await q.query(
-        `INSERT INTO users (id, email, password_hash, name, kana, role, email_verified_at, kyc_status, seller_status, seller_applied_at, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now() - interval '20 days')`,
-        [id, o.email, o.role ? pw.admin : pw.demo, o.name, o.kana, o.role ?? 'member', o.verified === false ? null : new Date(), kyc, o.seller ?? 'none', o.seller && o.seller !== 'none' ? new Date() : null]);
+        `INSERT INTO users (id, login_id, password_hash, name, kana, role, kyc_status, seller_status, seller_applied_at, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, now() - interval '20 days')`,
+        [id, o.loginId, o.role ? pw.admin : pw.demo, o.name, o.kana, o.role ?? 'member', kyc, o.seller ?? 'none', o.seller && o.seller !== 'none' ? new Date() : null]);
       if (kyc !== 'none' && !o.role) {
         const fileId = await storeImage(q, await sampleIdImage(o.name), id, 'kyc');
         await q.query('INSERT INTO kyc_submissions (id, user_id, doc_type, file_id, status, reviewed_at) VALUES ($1,$2,$3,$4,$5,$6)',
@@ -51,12 +51,12 @@ export async function seed(db: Database) {
       if (o.bank) await q.query('INSERT INTO bank_accounts (user_id, bank_name, branch, account_type, account_number, holder) VALUES ($1,$2,$3,$4,$5,$6)', [id, o.bank[0], o.bank[1], '普通', o.bank[2], o.kana]);
       return { id, name: o.name, role: (o.role ?? 'member') as 'admin' | 'member' };
     };
-    const admin = await mk({ email: 'admin@trade7.example', name: '運営 管理者', kana: 'ウンエイ カンリシャ', role: 'admin' });
-    const seller = await mk({ email: 'seller@trade7.example', name: '田中 一郎', kana: 'タナカ イチロウ', seller: 'approved', bank: ['三井住友銀行', '新宿支店', '7654321'] });
-    const buyer = await mk({ email: 'buyer@trade7.example', name: '佐藤 花子', kana: 'サトウ ハナコ' });
-    const buyer2 = await mk({ email: 'buyer2@trade7.example', name: '鈴木 次郎', kana: 'スズキ ジロウ' });
-    const newbie = await mk({ email: 'new@trade7.example', name: '高橋 美咲', kana: 'タカハシ ミサキ', kyc: 'pending' });
-    await mk({ email: 'seller2@trade7.example', name: '伊藤 健', kana: 'イトウ ケン', seller: 'pending' });
+    const admin = await mk({ loginId: 'admin', name: '運営 管理者', kana: 'ウンエイ カンリシャ', role: 'admin' });
+    const seller = await mk({ loginId: 'seller', name: '田中 一郎', kana: 'タナカ イチロウ', seller: 'approved', bank: ['三井住友銀行', '新宿支店', '7654321'] });
+    const buyer = await mk({ loginId: 'buyer', name: '佐藤 花子', kana: 'サトウ ハナコ' });
+    const buyer2 = await mk({ loginId: 'buyer2', name: '鈴木 次郎', kana: 'スズキ ジロウ' });
+    const newbie = await mk({ loginId: 'new', name: '高橋 美咲', kana: 'タカハシ ミサキ', kyc: 'pending' });
+    await mk({ loginId: 'seller2', name: '伊藤 健', kana: 'イトウ ケン', seller: 'pending' });
     const actx = { ...ctx, actor: admin };
 
     for (const [u, amt] of [[buyer, 60000], [buyer2, 30000]] as const) {
@@ -90,7 +90,7 @@ export async function seed(db: Database) {
     await moveBalance(q, seller.id, 'sales', price - fee, 'sale', tid, `手数料 ¥${fee} 控除後`);
     await audit(q, { ...ctx, actor: buyer }, 'trade.purchase', tid);
     await audit(q, { ...ctx, actor: buyer }, 'trade.complete', tid, '買い手の受取確認');
-    await queueMail(q, { userId: newbie.id }, 'kyc_submit', '本人確認書類を受け付けました', `${newbie.name} 様\n\n本人確認書類を受け付けました。`);
+    await notify(q, { userId: newbie.id }, 'kyc_submit', '本人確認書類を受け付けました', `${newbie.name} 様\n\n本人確認書類を受け付けました。`);
     await audit(q, ctx, 'system.seed', 'database', 'デモデータを作成');
     return true;
   });

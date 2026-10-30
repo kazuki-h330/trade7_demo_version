@@ -19,12 +19,12 @@ export const systemCtx: Ctx = { actor: null, ip: '-', ua: 'system' };
 export type UserStatus = 'active' | 'warned' | 'restricted' | 'frozen' | 'expelled';
 export interface UserRow {
   id: string;
-  email: string;
+  login_id: string;
+  must_change_password: boolean;
   password_hash: string;
   name: string;
   kana: string;
   role: Role;
-  email_verified_at: Date | null;
   status: UserStatus;
   kyc_status: 'none' | 'pending' | 'approved' | 'rejected';
   seller_status: 'none' | 'pending' | 'approved' | 'rejected';
@@ -41,7 +41,6 @@ export interface UserRow {
 export const actorOf = (u: UserRow): Actor => ({ id: u.id, name: u.name, role: u.role });
 
 export function tradeBlockReason(u: UserRow): string | null {
-  if (!u.email_verified_at) return 'メール認証が完了していません';
   if (u.kyc_status !== 'approved') return '本人確認が完了するまで売買・チャージはご利用いただけません';
   if (u.status === 'restricted') return 'アカウントが利用制限中のため、この操作はできません';
   if (u.status === 'frozen') return 'アカウントが凍結中のため、この操作はできません';

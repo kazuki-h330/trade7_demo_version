@@ -1,7 +1,7 @@
 import { Ban, Snowflake, TriangleAlert, UserRound } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ActionForm, ModalButton, SubmitButton } from '@/components/client';
+import { ActionForm, AdminResetPassword, ModalButton, SubmitButton } from '@/components/client';
 import { LedgerTable } from '@/components/ledger-table';
 import { Card, DL, Field, Notice, PageHeader, Status, Table } from '@/components/ui';
 import { fmtDate, uaShort, yen } from '@/lib/format';
@@ -25,12 +25,13 @@ export default async function UserDetail({ params }: { params: Promise<{ id: str
   const [bank, kyc, sanctions, trades, ledger, logs] = await Promise.all([bankOf(id), latestKyc(id), sanctionsOf(id), myTrades(id), ledgerFor(id), auditSearch(id, 100)]);
   return (
     <>
-      <PageHeader icon={<UserRound className="size-5" />} title={<span className="flex items-center gap-3">{u.name}<Status kind="user" value={u.status} /></span>} sub={u.email} actions={<Link href="/admin/users" className="btn-secondary">一覧へ</Link>} />
+      <PageHeader icon={<UserRound className="size-5" />} title={<span className="flex items-center gap-3">{u.name}<Status kind="user" value={u.status} /></span>} sub={<>ログインID：<span className="mono">{u.login_id}</span></>} actions={<><AdminResetPassword userId={u.id} name={u.name} /><Link href="/admin/users" className="btn-secondary">一覧へ</Link></>} />
       <div className="grid gap-5 lg:grid-cols-2">
         <Card title="会員情報">
           <DL items={[
             ['会員ID', <span key="i" className="mono">{u.id}</span>], ['氏名（カナ）', `${u.name}（${u.kana}）`],
-            ['メール認証', u.email_verified_at ? fmtDate(u.email_verified_at) : '未認証'],
+            ['ログインID', <span key="l" className="mono">{u.login_id}</span>],
+            ['パスワード', u.must_change_password ? <span key="p" className="text-amber-600">仮パスワード（未変更）</span> : '設定済'],
             ['本人確認', <Status key="k" kind="kyc" value={u.kyc_status} />], ['出品者', <Status key="s" kind="seller" value={u.seller_status} />],
             ['チャージ残高', <b key="c">{yen(u.charge_balance)}</b>], ['売上残高', <b key="sb">{yen(u.sales_balance)}</b>],
             ['振込先', bank ? `${bank.bank_name} ${bank.branch} ${bank.account_type} ${bank.account_number} ${bank.holder}` : '未登録'],

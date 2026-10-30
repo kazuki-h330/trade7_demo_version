@@ -35,7 +35,7 @@ export default async function Charge() {
           <div className="rounded-2xl bg-gradient-to-br from-sky-50 to-violet-50 p-5 ring-1 ring-sky-100">
             <DL items={[['銀行', b.name], ['支店', b.branch], ['種別', b.type], ['口座番号', <span key="n" className="mono text-lg font-bold">{b.number}</span>], ['口座名義', b.holder]]} />
           </div>
-          <div className="mt-4"><Notice>③ 運営が名義・金額を確認して承認すると残高に反映され、メールでお知らせします。ご本人名義以外からのお振込みは反映できません。</Notice></div>
+          <div className="mt-4"><Notice>③ 運営が名義・金額を確認して承認すると残高に反映され、「お知らせ」でお伝えします。ご本人名義以外からのお振込みは反映できません。</Notice></div>
         </Card>
       </div>
       <Card className="mt-5" title="入金申請履歴">

@@ -1,11 +1,9 @@
-import { flushOutbox } from './mail';
 import { autoConfirmDue } from './services/trades';
 
 const g = globalThis as unknown as { __trade7Scheduler?: NodeJS.Timeout };
 
 export async function runJobs() {
   const confirmed = await autoConfirmDue();
-  await flushOutbox();
   return { confirmed };
 }
 

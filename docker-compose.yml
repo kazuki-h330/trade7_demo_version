@@ -1,4 +1,4 @@
-# Production-like local stack: PostgreSQL + Mailpit (SMTP catcher at http://localhost:8025) + the app.
+# Production-like local stack: PostgreSQL + the app.
 # Usage: copy .env.example to .env, set CODE_ENCRYPTION_KEY / CODE_HASH_PEPPER, then `docker compose up --build`.
 services:
   db:
@@ -13,16 +13,11 @@ services:
       interval: 5s
       retries: 10
 
-  mail:
-    image: axllent/mailpit:v1.21
-    ports: ["8025:8025"]
-
   app:
     build: .
     env_file: .env
     environment:
       DATABASE_URL: postgres://trade7:trade7@db:5432/trade7
-      SMTP_URL: smtp://mail:1025
       APP_URL: http://localhost:3000
     ports: ["3000:3000"]
     depends_on:

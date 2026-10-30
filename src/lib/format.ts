@@ -25,7 +25,7 @@ export const LABEL = {
   charge: { pending: '着金確認待ち', approved: '反映済', rejected: '却下' },
   payout: { exported: 'CSV出力済・未払', paid: '支払済' },
   ledger: { charge: 'チャージ', purchase: '購入代金', refund: '返還', sale: '売上', payout: '支払済', adjust: '管理者調整' },
-  mail: { queued: '送信待ち', sent: '送信済', logged: '記録のみ（SMTP未設定）', failed: '送信失敗' },
+  mail: { queued: '送信待ち', sent: '通知済', logged: '通知済', failed: '送信失敗' },
 } as const;
 
 export type Tone = 'green' | 'amber' | 'red' | 'slate' | 'blue' | 'violet';

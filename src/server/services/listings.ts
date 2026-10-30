@@ -2,7 +2,7 @@ import { audit } from '../audit';
 import { calcPrice, fail, newId, sellBlockReason, type Ctx } from '../core';
 import { codeFingerprint, decryptCode, encryptCode, normalizeCode } from '../crypto';
 import { getDb } from '../db';
-import { queueMail } from '../mail';
+import { notify } from '../mail';
 import { getSettings } from '../settings';
 import { autoWarn, lockUser, requireActor, requireAdmin } from './common';
 
@@ -41,8 +41,8 @@ export async function createListing(ctx: Ctx, input: { face: number; rateX10: nu
       `INSERT INTO listings (id, seller_id, face, rate_x10, price, code_ct, code_iv, code_tag, key_version, code_head, code_tail, code_fp)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [id, u.id, input.face, input.rateX10, calcPrice(input.face, input.rateX10), enc.ct, enc.iv, enc.tag, enc.keyVersion, code.slice(0, 4), code.slice(-4), fp]);
-    await queueMail(q, { userId: u.id }, 'listing_created', '出品を受け付けました', `${u.name} 様\n\n出品 ${id}（額面 ${yen(input.face)}・販売利率 ${pct(input.rateX10)}）を受け付けました。\n運営による残高確認の完了後、マーケットに掲載されます。`);
-    await queueMail(q, 'ops', 'listing_created', '残高確認の依頼', `出品 ${id}（${u.name} 様・額面 ${yen(input.face)}）の残高確認をお願いします。`);
+    await notify(q, { userId: u.id }, 'listing_created', '出品を受け付けました', `${u.name} 様\n\n出品 ${id}（額面 ${yen(input.face)}・販売利率 ${pct(input.rateX10)}）を受け付けました。\n運営による残高確認の完了後、マーケットに掲載されます。`);
+    await notify(q, 'ops', 'listing_created', '残高確認の依頼', `出品 ${id}（${u.name} 様・額面 ${yen(input.face)}）の残高確認をお願いします。`);
     await audit(q, ctx, 'listing.create', id, `額面 ${yen(input.face)} / 利率 ${pct(input.rateX10)} / コード ${code.slice(0, 4)}…${code.slice(-4)}`);
     return { duplicate: false as const, id };
   });
@@ -98,10 +98,10 @@ export async function recordBalanceCheck(ctx: Ctx, listingId: string, input: { r
       [listingId, result === 'ok' ? 'active' : 'rejected', result, input.balance, input.method, note || null, admin.id]);
     const { rows: su } = await q.query<{ name: string }>('SELECT name FROM users WHERE id = $1', [l.seller_id]);
     if (result === 'ok') {
-      await queueMail(q, { userId: l.seller_id }, 'listing_live', '出品が掲載されました', `${su[0].name} 様\n\n出品 ${listingId}（額面 ${yen(l.face)}）の残高確認が完了し、マーケットに掲載しました。`);
+      await notify(q, { userId: l.seller_id }, 'listing_live', '出品が掲載されました', `${su[0].name} 様\n\n出品 ${listingId}（額面 ${yen(l.face)}）の残高確認が完了し、マーケットに掲載しました。`);
     } else {
       const { rows: f } = await q.query<{ n: number }>('UPDATE users SET flag_invalid = flag_invalid + 1 WHERE id = $1 RETURNING flag_invalid AS n', [l.seller_id]);
-      await queueMail(q, { userId: l.seller_id }, 'listing_rejected', '出品を掲載できませんでした', `${su[0].name} 様\n\n出品 ${listingId} は残高確認の結果、掲載できませんでした。\n理由：${note || '残高を確認できませんでした'}\n\n無効なコードの繰り返し出品は、利用制限・アカウント凍結の対象となります。`);
+      await notify(q, { userId: l.seller_id }, 'listing_rejected', '出品を掲載できませんでした', `${su[0].name} 様\n\n出品 ${listingId} は残高確認の結果、掲載できませんでした。\n理由：${note || '残高を確認できませんでした'}\n\n無効なコードの繰り返し出品は、利用制限・アカウント凍結の対象となります。`);
       if (f[0].n >= 2) await autoWarn(q, ctx, l.seller_id, '残高確認NGの出品の繰り返し（自動検知）');
     }
     await audit(q, ctx, 'listing.balance_check', listingId, `${result.toUpperCase()} 確認残高 ${yen(input.balance)} / ${input.method}${note ? ' / ' + note : ''}`);

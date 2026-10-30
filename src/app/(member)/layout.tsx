@@ -25,7 +25,7 @@ export default async function MemberLayout({ children }: { children: React.React
   let banner: React.ReactNode = null;
   if (u.status === 'frozen') banner = <Notice tone="red" icon={<TriangleAlert className="size-4 shrink-0" />}>アカウントは凍結中です。残高・係争中の取引は運営で保全しています。お問い合わせは運営事務局まで。</Notice>;
   else if (u.status === 'restricted') banner = <Notice tone="red" icon={<TriangleAlert className="size-4 shrink-0" />}>アカウントは利用制限中です。新規の出品・購入・チャージはできません。</Notice>;
-  else if (!u.email_verified_at) banner = <Notice tone="amber">メール認証が完了していません。<Link className="font-semibold underline" href="/account">マイページ</Link>で認証コードを入力してください。</Notice>;
+  else if (u.must_change_password) banner = <Notice tone="amber">仮パスワードでログイン中です。<Link className="font-semibold underline" href="/account">マイページ</Link>で新しいパスワードを設定してください。</Notice>;
   else if (u.kyc_status !== 'approved') banner = <Notice tone="amber">本人確認（<b>{u.kyc_status === 'pending' ? '審査中' : u.kyc_status === 'rejected' ? '差戻し' : '未提出'}</b>）が完了するまで売買・チャージはご利用いただけません。<Link className="font-semibold underline" href="/account">本人確認へ</Link></Notice>;
   else if (u.status === 'warned') banner = <Notice tone="amber">運営より警告が記録されています。利用規約をご確認ください。</Notice>;
 

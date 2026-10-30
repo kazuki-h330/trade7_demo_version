@@ -9,7 +9,6 @@ A production-structured implementation of the **基本 (base) scope**: the 要�
 - PostgreSQL, using PGlite (embedded Postgres) in development
 - Node `crypto` for encryption
 - sharp for image processing
-- nodemailer for email
 - Gemini over REST
 
 Python is not used. Nothing in the base scope needs a second runtime. 追加2's automated balance check could be a separate service later if it ends up using browser automation.
@@ -25,32 +24,32 @@ npm run dev            # http://localhost:3000
 
 `.env.local` already sets `AUTO_SEED=true`. On first start the app creates the database in `.data/` and seeds demo accounts. The login page shows one-click test logins.
 
-| Account | Password | Role |
+| Login ID | Password | Role |
 |---|---|---|
-| admin@trade7.example | admin1234 | 運営 (admin) |
-| seller@trade7.example | demo1234 | Approved seller, has listings + bank account |
-| buyer@trade7.example | demo1234 | Buyer with ¥55,700 balance |
-| buyer2@trade7.example | demo1234 | Second buyer |
-| new@trade7.example | demo1234 | KYC pending (for the review screen) |
-| seller2@trade7.example | demo1234 | Seller application pending |
+| `admin` | admin1234 | 運営 (admin) |
+| `seller` | demo1234 | Approved seller, has listings + bank account |
+| `buyer` | demo1234 | Buyer with ¥55,700 balance |
+| `buyer2` | demo1234 | Second buyer |
+| `new` | demo1234 | KYC pending (for the review screen) |
+| `seller2` | demo1234 | Seller application pending |
 
 Other commands:
 
 | Command | What it does |
 |---|---|
-| `npm test` | 17 integration tests on an in-memory Postgres: purchase race, dispute/refund, payouts, audit chain, password reset, moderation rules |
+| `npm test` | 20 integration tests on an in-memory Postgres: purchase race, dispute/refund, payouts, audit chain, login IDs, password change / admin reset, migrations, moderation rules |
 | `npm run build && npm start` | Production build and server |
 | `npm run db:reset` | Wipe local data; it is re-seeded on the next start |
 | `npm run typecheck` | Type-check the project |
 
-Without SMTP configured, emails (including verification codes) are not sent. They appear in **お知らせ** (member) and **メール送信ログ** (admin).
+**No email is used anywhere.** Members sign up and log in with a **login ID** (3–30 chars: a–z, 0–9, `_`, `-`) and password. Notifications are in-app only: **お知らせ** for members, **通知ログ** for admins.
 
 Tip for demos: set **設定 › 受取確認時間** to 1 minute to show auto-confirm quickly.
 
 ## What is implemented
 
 **Member side:**
-- **Registration:** email verification with a 6-digit code, and password reset by a one-time link.
+- **Registration:** name, kana, login ID and password (no email). Members can change their password on マイページ. A forgotten password is reset by staff: 会員詳細 → パスワード再発行 issues a one-time temporary password, and the member must change it at next login.
 - **KYC:** ID image upload, then manual staff review.
 - **Seller application:** a separate review step before anyone can list.
 - **Market:** filter by face value.
@@ -70,7 +69,7 @@ Tip for demos: set **設定 › 受取確認時間** to 1 minute to show auto-co
 - Balance correction (reason required)
 - Payout batches: CSV export, then mark as paid
 - Members and staged sanctions (警告 → 利用制限 → 凍結 → 強制退会)
-- Detection log, audit log (search, verification, CSV), email log
+- Detection log, audit log (search, verification, CSV), notification log
 - Settings for the values the spec leaves open: fee, window, limits, deposit account, AI on/off
 
 **Security and integrity (production behaviour, not mocked):**
@@ -84,20 +83,20 @@ Tip for demos: set **設定 › 受取確認時間** to 1 minute to show auto-co
 | Sessions | Random token in an httpOnly cookie, stored only as a hash in the DB. 7 days for members, 12 hours for admins. Login lockout after 5 failures in 15 minutes. bcrypt passwords. |
 | Uploads | Re-encoded by sharp (this rejects non-images and strips EXIF/GPS). Stored outside `public/` and served only to the owner, the trade parties or admins. |
 | Moderation | Rule check first; anything that hits a rule is **never sent to Gemini**. Gemini runs with a JSON schema and an 8-second timeout, and falls back to local heuristics if it fails. 3 blocked messages trigger an automatic warning. |
-| Mail | Transactional outbox: rows are written in the same DB transaction, then delivered with retries. A rolled-back action never sends mail. |
-| Scheduler | Auto-confirm and mail delivery run in-process every 15 seconds. For multiple instances, use `POST /api/cron` with `CRON_SECRET`. The job uses `SKIP LOCKED`, so it is safe on several instances. |
+| Notifications | In-app only, written in the same DB transaction as the change, so a rolled-back action never leaves a notification. |
+| Scheduler | Auto-confirm runs in-process every 15 seconds. For multiple instances, use `POST /api/cron` with `CRON_SECRET`. The job uses `SKIP LOCKED`, so it is safe on several instances. |
 | CSV | UTF-8 BOM for Excel, and formula-injection escaping. Every export is audited. |
 
 ## Project layout
 
 ```
 src/server/migrations.ts  SQL schema migrations (run automatically on start)
-src/server/           core: db adapter, crypto, audit, ledger, mail, storage, moderation, auth
+src/server/           core: db adapter, crypto, audit, ledger, notifications (mail.ts), storage, moderation, auth
 src/server/services/  business rules (accounts, listings, trades, money, admin)
 src/server/actions/   Server Actions (thin wrappers around services)
 src/server/queries.ts read models for pages
 src/app/(member)/     member pages     src/app/admin/  admin pages
-src/app/(auth)/       login / register / password reset
+src/app/(auth)/       login / register / forgot-password guidance
 src/components/       UI kit, client components, trade detail
 tests/                integration tests (vitest + in-memory Postgres)
 ```
@@ -114,9 +113,9 @@ The app runs on Vercel as-is. It needs a Postgres database and a few environment
    | `CODE_ENCRYPTION_KEY` | 32 random bytes, base64. Generate: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. **Never change it after data exists**, or stored gift codes can't be decrypted. |
    | `CODE_HASH_PEPPER` | Another value generated the same way |
    | `CRON_SECRET` | Any long random string (used by the daily Vercel Cron in `vercel.json`) |
-   | `APP_URL` | Your deployment URL, e.g. `https://trade7-xxx.vercel.app` (used in password-reset links) |
+   | `APP_URL` | Your deployment URL, e.g. `https://trade7-xxx.vercel.app` |
    | `AUTO_SEED` | `true` for a client demo (creates the test accounts); remove it for real production |
-   | `GEMINI_API_KEY`, `SMTP_URL`, `MAIL_FROM`, `OPS_EMAIL` | Optional. Without them, AI moderation falls back to local rules and emails are only logged in the app |
+   | `GEMINI_API_KEY` | Optional. Without it, AI moderation falls back to local rules |
 
 3. **Redeploy** (Deployments → ⋯ → Redeploy) so the variables take effect.
 4. Open `https://<your-app>/api/health`. It should show `"ok": true` and `"persistent": true`.
@@ -131,10 +130,10 @@ How it adapts to serverless:
 
 1. Provision PostgreSQL 15+ and set `DATABASE_URL`. Migrations apply on start.
 2. Generate `CODE_ENCRYPTION_KEY` and `CODE_HASH_PEPPER` (32 random bytes each, base64) and keep them in a secret manager. **Losing the key makes stored codes unreadable.**
-3. Set `SMTP_URL`, `MAIL_FROM`, `OPS_EMAIL`, `GEMINI_API_KEY`, `APP_URL` and `CRON_SECRET`.
+3. Set `GEMINI_API_KEY`, `APP_URL` and `CRON_SECRET`.
 4. Make sure `AUTO_SEED` is **unset**.
 5. Uploaded images are stored in the database (`files.data`). At larger scale, move them to S3/GCS; only `storage.ts` and the file route change.
-6. Use `docker compose up --build` to try a production-like stack (Postgres + Mailpit + the app), or deploy the `Dockerfile`.
+6. Use `docker compose up --build` to try a production-like stack (Postgres + the app), or deploy the `Dockerfile`.
 7. Run behind HTTPS. A reverse proxy should set `X-Forwarded-For`, which the audit log records.
 
 ## Remaining before go-live (the last ~10%)

@@ -17,7 +17,7 @@ export default async function SellersPage() {
         <Table rows={list.length} empty="申請はありません" head={['会員', '本人確認', '申請日時', '購入実績', '措置履歴', '不正指標', '状態', '操作']}>
           {list.map(u => (
             <tr key={u.id}>
-              <td><Link className="font-semibold text-violet-700 hover:underline" href={`/admin/users/${u.id}`}>{u.name}</Link><div className="text-xs text-slate-400">{u.email}</div></td>
+              <td><Link className="font-semibold text-violet-700 hover:underline" href={`/admin/users/${u.id}`}>{u.name}</Link><div className="text-xs text-slate-400">{u.login_id}</div></td>
               <td><Status kind="kyc" value={u.kyc_status} /></td>
               <td>{fmtDate(u.seller_applied_at)}</td>
               <td>{u.completed_buys}件</td>

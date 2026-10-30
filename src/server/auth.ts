@@ -1,9 +1,7 @@
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { after } from 'next/server';
-import { flushOutbox } from './mail';
-import { autoConfirmDue } from './services/trades';
 import { cache } from 'react';
+import { autoConfirmDue } from './services/trades';
 import { actorOf, type Ctx, type UserRow } from './core';
 import { sha256 } from './crypto';
 import { getDb } from './db';
@@ -27,7 +25,7 @@ async function sweepDueTrades() {
   if (now - (g.__trade7LastSweep ?? 0) < 10_000) return;
   g.__trade7LastSweep = now;
   try {
-    if (await autoConfirmDue()) after(() => flushOutbox());
+    await autoConfirmDue();
   } catch (e) {
     console.error('[sweep]', e);
   }

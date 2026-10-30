@@ -1,7 +1,7 @@
 import { audit } from '../audit';
 import { fail, newId, systemCtx, type Ctx, type UserRow, type UserStatus } from '../core';
 import type { Queryable } from '../db';
-import { queueMail } from '../mail';
+import { notify } from '../mail';
 
 export async function lockUser(q: Queryable, id: string): Promise<UserRow> {
   const { rows } = await q.query<UserRow>('SELECT * FROM users WHERE id = $1 FOR UPDATE', [id]);
@@ -36,7 +36,7 @@ export async function applySanction(q: Queryable, ctx: Ctx, userId: string, leve
     await q.query("UPDATE listings SET status = 'withdrawn', version = version + 1 WHERE seller_id = $1 AND status IN ('checking','active')", [userId]);
   }
   if (level === 'expelled') await q.query('DELETE FROM sessions WHERE user_id = $1', [userId]);
-  await queueMail(q, { userId }, 'sanction', `アカウント状態の変更（${SANCTION_LABEL[level]}）`, `${u.name} 様\n\n${SANCTION_TEXT[level]}\n理由：${reason}`);
+  await notify(q, { userId }, 'sanction', `アカウント状態の変更（${SANCTION_LABEL[level]}）`, `${u.name} 様\n\n${SANCTION_TEXT[level]}\n理由：${reason}`);
   await audit(q, auto ? { ...systemCtx, ip: ctx.ip } : ctx, `user.sanction.${level}`, userId, `${auto ? '[自動] ' : ''}${reason}`);
 }
 

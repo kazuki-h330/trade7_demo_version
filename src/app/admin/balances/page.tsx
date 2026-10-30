@@ -16,7 +16,7 @@ export default async function Balances() {
       <PageHeader icon={<Wallet className="size-5" />} title="残高・調整" sub="誤入金・取引中止などの例外時に、理由を記録したうえで残高を訂正できます（全操作が監査ログに残ります）" />
       <Card title="残高訂正">
         <ActionForm action={adjustBalanceAction} className="grid gap-4 md:grid-cols-[1fr_160px_150px_2fr_auto] md:items-end" confirm="残高を訂正します。よろしいですか？">
-          <Field label="会員"><select name="userId" className="input">{list.map(u => <option key={u.id} value={u.id}>{u.name}（{u.email}）</option>)}</select></Field>
+          <Field label="会員"><select name="userId" className="input">{list.map(u => <option key={u.id} value={u.id}>{u.name}（{u.login_id}）</option>)}</select></Field>
           <Field label="対象"><select name="account" className="input"><option value="charge">チャージ残高</option><option value="sales">売上残高</option></select></Field>
           <Field label="増減額（例 -500）"><input name="delta" type="number" step={1} required className="input" /></Field>
           <Field label="理由（必須・会員へ通知）"><input name="reason" required className="input" /></Field>

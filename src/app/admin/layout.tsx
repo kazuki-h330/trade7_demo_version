@@ -28,7 +28,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       { href: '/admin/users', label: '会員・不正対応', icon: 'users' as const },
       { href: '/admin/detections', label: '禁止行為検知', icon: 'detections' as const, count: c.detections },
       { href: '/admin/audit', label: '監査ログ', icon: 'audit' as const },
-      { href: '/admin/emails', label: 'メール送信ログ', icon: 'emails' as const },
+      { href: '/admin/emails', label: '通知ログ', icon: 'emails' as const },
       { href: '/admin/settings', label: '設定', icon: 'settings' as const },
     ] },
   ];
@@ -42,7 +42,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <MobileCollapse badge={Object.values(c).reduce((a, b) => a + b, 0)}>
           <AdminNav groups={groups} />
           <div className="mt-6 flex items-center justify-between rounded-2xl bg-white/10 px-3 py-2.5 text-sm text-white">
-            <div><div className="font-semibold">{u.name}</div><div className="text-xs text-violet-200/70">{u.email}</div></div>
+            <div><div className="font-semibold">{u.name}</div><div className="text-xs text-violet-200/70">{u.login_id}</div></div>
             <form action={logoutAction}><button className="rounded-lg p-1.5 text-violet-100 hover:bg-white/10" title="ログアウト"><LogOut className="size-4" /></button></form>
           </div>
         </MobileCollapse>

@@ -5,7 +5,7 @@ import { GiftArt } from '@/components/ui';
 
 export default function Landing() {
   const steps = [
-    { icon: IdCard, color: 'from-violet-500 to-indigo-500', title: '会員登録・本人確認', text: 'メール認証のあと、身分証画像を提出。運営が目視で審査します。' },
+    { icon: IdCard, color: 'from-violet-500 to-indigo-500', title: '会員登録・本人確認', text: 'ログインIDとパスワードで登録し、身分証画像を提出。運営が目視で審査します。' },
     { icon: Wallet, color: 'from-fuchsia-500 to-pink-500', title: 'チャージ', text: '指定口座へ振込むと、運営が名義と金額を確認して残高に反映します。' },
     { icon: Sparkles, color: 'from-amber-400 to-orange-500', title: '購入', text: '運営が残高を確認済みのギフト券だけを掲載。価格は購入時にロックされます。' },
     { icon: Clock, color: 'from-emerald-400 to-teal-500', title: '30分以内に確認', text: 'コードを確認して取引完了。問題があればスクリーンショット付きでエラー申請。' },

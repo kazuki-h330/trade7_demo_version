@@ -1,8 +1,8 @@
-import { BadgeCheck, IdCard, Landmark, UserRound } from 'lucide-react';
+import { IdCard, KeyRound, Landmark, UserRound } from 'lucide-react';
 import { ActionForm, ImageInput, SubmitButton } from '@/components/client';
 import { Card, DL, Field, Notice, PageHeader, Status, Table } from '@/components/ui';
 import { fmtDate } from '@/lib/format';
-import { resendVerificationAction, verifyEmailAction } from '@/server/actions/auth';
+import { changePasswordAction } from '@/server/actions/auth';
 import { saveBankAction, submitKycAction } from '@/server/actions/member';
 import { requireMember } from '@/server/auth';
 import { bankOf, latestKyc, sanctionsOf } from '@/server/queries';
@@ -14,31 +14,33 @@ export default async function Account({ searchParams }: { searchParams: Promise<
   const u = await requireMember();
   const [kyc, bank, sanctions] = await Promise.all([latestKyc(u.id), bankOf(u.id), sanctionsOf(u.id)]);
   const welcome = (await searchParams).welcome;
+  const passwordForm = (
+    <Card title={<span className="flex items-center gap-2"><KeyRound className="size-4 text-violet-600" />パスワードの変更</span>} className={u.must_change_password ? 'ring-2 ring-amber-400' : ''}>
+      {u.must_change_password && <div className="mb-4"><Notice tone="amber">運営が発行した仮パスワードでログインしています。新しいパスワードを設定してください。</Notice></div>}
+      <ActionForm action={changePasswordAction} className="grid gap-4 sm:grid-cols-3 sm:items-end">
+        <Field label={u.must_change_password ? '仮パスワード' : '現在のパスワード'}><input name="current" type="password" required autoComplete="current-password" className="input" /></Field>
+        <Field label="新しいパスワード（8文字以上）"><input name="password" type="password" minLength={8} required autoComplete="new-password" className="input" /></Field>
+        <Field label="新しいパスワード（確認）"><input name="confirm" type="password" minLength={8} required autoComplete="new-password" className="input" /></Field>
+        <div className="sm:col-span-3"><SubmitButton>パスワードを変更</SubmitButton></div>
+      </ActionForm>
+    </Card>
+  );
   return (
     <>
       <PageHeader icon={<UserRound className="size-5" />} title="マイページ" />
-      {welcome && !u.email_verified_at && <div className="mb-5"><Notice tone="green">ご登録ありがとうございます！メールに届いた6桁の認証コードを入力してください。</Notice></div>}
+      {welcome && <div className="mb-5"><Notice tone="green">ご登録ありがとうございます！売買・チャージを利用するには、下の「本人確認」から身分証画像を提出してください。</Notice></div>}
+      {u.must_change_password && <div className="mb-5">{passwordForm}</div>}
       <div className="grid gap-5 lg:grid-cols-2">
         <Card title="会員情報">
           <DL items={[
-            ['会員ID', <span key="i" className="mono">{u.id}</span>],
+            ['ログインID', <span key="l" className="mono font-semibold">{u.login_id}</span>],
+            ['会員番号', <span key="i" className="mono text-slate-500">{u.id}</span>],
             ['氏名', `${u.name}（${u.kana}）`],
-            ['メール', u.email],
-            ['メール認証', u.email_verified_at ? <span key="v" className="flex items-center gap-1 text-emerald-600"><BadgeCheck className="size-4" />認証済</span> : <span key="v" className="text-amber-600">未認証</span>],
             ['アカウント状態', <Status key="s" kind="user" value={u.status} />],
             ['本人確認', <Status key="k" kind="kyc" value={u.kyc_status} />],
             ['出品者審査', <Status key="sl" kind="seller" value={u.seller_status} />],
             ['登録日', fmtDate(u.created_at)],
           ]} />
-          {!u.email_verified_at && (
-            <div className="mt-5 rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200">
-              <ActionForm action={verifyEmailAction} className="flex flex-wrap items-end gap-2">
-                <Field label="認証コード（6桁）"><input name="code" required inputMode="numeric" maxLength={6} className="input mono w-40 text-lg tracking-[.3em]" /></Field>
-                <SubmitButton>認証する</SubmitButton>
-              </ActionForm>
-              <ActionForm action={resendVerificationAction} className="mt-2"><SubmitButton className="btn-ghost btn-sm">認証コードを再送する</SubmitButton></ActionForm>
-            </div>
-          )}
         </Card>
 
         <Card title={<span className="flex items-center gap-2"><IdCard className="size-4 text-violet-600" />本人確認</span>}>
@@ -54,17 +56,15 @@ export default async function Account({ searchParams }: { searchParams: Promise<
             </div>
           )}
           {(u.kyc_status === 'none' || u.kyc_status === 'rejected') && (
-            u.email_verified_at ? (
-              <ActionForm action={submitKycAction} className="space-y-4">
-                <Field label="書類の種類"><select name="docType" className="input">{DOC_TYPES.map(d => <option key={d}>{d}</option>)}</select></Field>
-                <Field label="身分証画像（PNG / JPEG / WebP・5MBまで）" hint="氏名・生年月日・住所・有効期限が鮮明に写るように撮影してください。画像は再エンコードされ、位置情報などのメタデータは削除されます。">
-                  <ImageInput name="file" required max={1} />
-                </Field>
-                <SubmitButton pendingText="アップロード中…">提出する</SubmitButton>
-              </ActionForm>
-            ) : <Notice tone="amber">先にメール認証を完了してください。</Notice>
+            <ActionForm action={submitKycAction} className="space-y-4">
+              <Field label="書類の種類"><select name="docType" className="input">{DOC_TYPES.map(d => <option key={d}>{d}</option>)}</select></Field>
+              <Field label="身分証画像（PNG / JPEG / WebP・5MBまで）" hint="氏名・生年月日・住所・有効期限が鮮明に写るように撮影してください。画像は再エンコードされ、位置情報などのメタデータは削除されます。">
+                <ImageInput name="file" required max={1} />
+              </Field>
+              <SubmitButton pendingText="アップロード中…">提出する</SubmitButton>
+            </ActionForm>
           )}
-          {u.kyc_status === 'pending' && <Notice>運営が審査中です。完了するとメールでお知らせします。</Notice>}
+          {u.kyc_status === 'pending' && <Notice>運営が審査中です。結果は「お知らせ」でお伝えします。</Notice>}
         </Card>
 
         <Card title={<span className="flex items-center gap-2"><Landmark className="size-4 text-violet-600" />売上の振込先口座</span>}>
@@ -84,6 +84,7 @@ export default async function Account({ searchParams }: { searchParams: Promise<
           </Table>
         </Card>
       </div>
+      {!u.must_change_password && <div className="mt-5">{passwordForm}</div>}
     </>
   );
 }

@@ -2,7 +2,7 @@ import { audit } from '../audit';
 import { fail, newId, tradeBlockReason, type Ctx, type UserStatus } from '../core';
 import { getDb, type Queryable } from '../db';
 import { moveBalance, type Account } from '../ledger';
-import { queueMail } from '../mail';
+import { notify } from '../mail';
 import { getSettings } from '../settings';
 import { applySanction, lockUser, requireActor, requireAdmin, SANCTION_LABEL } from './common';
 
@@ -23,9 +23,9 @@ export async function requestCharge(ctx: Ctx, amount: number, payerName: string)
     const id = newId('CHG');
     await q.query('INSERT INTO charges (id, user_id, amount, payer_name) VALUES ($1,$2,$3,$4)', [id, u.id, amount, payerName.trim()]);
     const b = s.depositBank;
-    await queueMail(q, { userId: u.id }, 'charge_request', '入金申請を受け付けました',
+    await notify(q, { userId: u.id }, 'charge_request', '入金申請を受け付けました',
       `${u.name} 様\n\n入金申請（${yen(amount)}）を受け付けました。下記口座へお振込みください。\n\n${b.name} ${b.branch}\n${b.type} ${b.number}\n口座名義：${b.holder}\n振込名義：${payerName}\n\n※ご本人名義以外からのお振込みは反映できません。\n※チャージ残高は商品購入にのみご利用いただけます（払い戻し不可）。`);
-    await queueMail(q, 'ops', 'charge_request', '入金申請', `${u.name} 様 ${yen(amount)}（振込名義 ${payerName}）申請ID ${id}`);
+    await notify(q, 'ops', 'charge_request', '入金申請', `${u.name} 様 ${yen(amount)}（振込名義 ${payerName}）申請ID ${id}`);
     await audit(q, ctx, 'charge.request', id, yen(amount));
     return id;
   });
@@ -44,12 +44,12 @@ export async function reviewCharge(ctx: Ctx, chargeId: string, decision: 'approv
       if (!Number.isInteger(received) || received <= 0) fail('着金額を入力してください');
       await q.query("UPDATE charges SET status = 'approved', received = $2, reviewed_at = now(), reviewer_id = $3, note = $4 WHERE id = $1", [chargeId, received, ctx.actor!.id, input.note]);
       const bal = await moveBalance(q, c.user_id, 'charge', received, 'charge', chargeId, received !== c.amount ? `申請額 ${yen(c.amount)} と相違` : '');
-      await queueMail(q, { userId: c.user_id }, 'charge_done', 'チャージが反映されました', `${ur[0].name} 様\n\n${yen(received)} をチャージ残高に反映しました。\n現在のチャージ残高：${yen(bal)}`);
+      await notify(q, { userId: c.user_id }, 'charge_done', 'チャージが反映されました', `${ur[0].name} 様\n\n${yen(received)} をチャージ残高に反映しました。\n現在のチャージ残高：${yen(bal)}`);
       await audit(q, ctx, 'charge.approve', chargeId, `${yen(received)}${received !== c.amount ? `（申請 ${yen(c.amount)}）` : ''}`);
     } else {
       if (!input.note.trim()) fail('却下理由を入力してください');
       await q.query("UPDATE charges SET status = 'rejected', reviewed_at = now(), reviewer_id = $2, note = $3 WHERE id = $1", [chargeId, ctx.actor!.id, input.note]);
-      await queueMail(q, { userId: c.user_id }, 'charge_rejected', '入金申請について', `${ur[0].name} 様\n\n入金申請 ${chargeId} を反映できませんでした。\n理由：${input.note}\n\nご不明な点は運営事務局までお問い合わせください。`);
+      await notify(q, { userId: c.user_id }, 'charge_rejected', '入金申請について', `${ur[0].name} 様\n\n入金申請 ${chargeId} を反映できませんでした。\n理由：${input.note}\n\nご不明な点は運営事務局までお問い合わせください。`);
       await audit(q, ctx, 'charge.reject', chargeId, input.note);
     }
   });
@@ -64,7 +64,7 @@ export async function adjustBalance(ctx: Ctx, userId: string, account: Account, 
   await db.tx(async q => {
     const u = await lockUser(q, userId);
     await moveBalance(q, userId, account, delta, 'adjust', 'ADMIN', reason);
-    await queueMail(q, { userId }, 'balance_adjust', '残高が訂正されました', `${u.name} 様\n\n${account === 'charge' ? 'チャージ' : '売上'}残高を ${delta > 0 ? '+' : ''}${delta.toLocaleString('ja-JP')}円 訂正しました。\n理由：${reason}`);
+    await notify(q, { userId }, 'balance_adjust', '残高が訂正されました', `${u.name} 様\n\n${account === 'charge' ? 'チャージ' : '売上'}残高を ${delta > 0 ? '+' : ''}${delta.toLocaleString('ja-JP')}円 訂正しました。\n理由：${reason}`);
     await audit(q, ctx, 'balance.adjust', userId, `${account} ${delta > 0 ? '+' : ''}${delta} / ${reason}`);
   });
 }
@@ -120,7 +120,7 @@ export async function markPayoutPaid(ctx: Ctx, payoutId: string) {
     const { rows: items } = await q.query<{ seller_id: string; amount: number; trade_count: number; bank: { bankName: string; branch: string } }>('SELECT seller_id, amount, trade_count, bank FROM payout_items WHERE payout_id = $1', [payoutId]);
     for (const i of items) {
       await moveBalance(q, i.seller_id, 'sales', -i.amount, 'payout', payoutId, `${i.trade_count}件分`);
-      await queueMail(q, { userId: i.seller_id }, 'payout', '売上をお振込みしました', `売上 ${yen(i.amount)}（${i.trade_count}件分）を ${i.bank.bankName} ${i.bank.branch} へお振込みしました。`);
+      await notify(q, { userId: i.seller_id }, 'payout', '売上をお振込みしました', `売上 ${yen(i.amount)}（${i.trade_count}件分）を ${i.bank.bankName} ${i.bank.branch} へお振込みしました。`);
     }
     await q.query("UPDATE payouts SET status = 'paid', paid_at = now(), paid_by = $2 WHERE id = $1", [payoutId, ctx.actor!.id]);
     await audit(q, ctx, 'payout.paid', payoutId, `${items.length}名 / ${yen(items.reduce((s, i) => s + i.amount, 0))}`);

@@ -5,7 +5,7 @@ import { getCtx } from '../auth';
 import { AppError, type UserStatus } from '../core';
 import type { Account } from '../ledger';
 import { getDb } from '../db';
-import { reviewKyc, reviewSeller } from '../services/accounts';
+import { adminResetPassword, reviewKyc, reviewSeller } from '../services/accounts';
 import { runAuditVerification, updateSettings } from '../services/admin';
 import { adminDecrypt, recordBalanceCheck } from '../services/listings';
 import { adjustBalance, createPayoutBatch, markPayoutPaid, reviewCharge, reviewDetection, sanctionUser } from '../services/money';
@@ -87,6 +87,12 @@ export const verifyAuditAction = action(async ctx => {
   if (!r.ok) throw new AppError(`改ざんを検出しました（seq ${r.brokenAt}）。直ちにバックアップと照合してください`);
   return `監査ログ ${r.count} 件のハッシュチェーンはすべて整合しています`;
 });
+
+/** Returns the one-time temporary password so the admin can tell the member (it is never stored in plain text). */
+export async function adminResetPasswordAction(userId: string): Promise<{ password?: string; error?: string }> {
+  try { return { password: await adminResetPassword(await getCtx(), userId) }; }
+  catch (e) { return { error: e instanceof AppError ? e.message : '再発行できませんでした' }; }
+}
 
 export async function adminDecryptAction(listingId: string, reason: string): Promise<{ code?: string; error?: string }> {
   try { return { code: await adminDecrypt(await getCtx(), listingId, reason) }; }

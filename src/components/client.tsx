@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useActionState, useEffect, useRef, useState, useTransition, type ReactNode } from 'react';
 import { useFormStatus } from 'react-dom';
 import type { ActionState } from '@/server/action';
-import { adminDecryptAction } from '@/server/actions/admin';
+import { adminDecryptAction, adminResetPasswordAction } from '@/server/actions/admin';
 import { markMailReadAction, revealCodeAction } from '@/server/actions/member';
 
 /* ---------- toasts ---------- */
@@ -213,6 +213,40 @@ export function AdminDecrypt({ listingId, reasons }: { listingId: string; reason
             if (r.code) { setCode(r.code.replace(/(.{4})(?=.)/g, '$1 ')); setOpen(false); } else toast(r.error ?? 'エラー', 'err');
           })}>{pending && <LoaderCircle className="size-4 animate-spin" />}復号して表示</button>
         </div>
+      </Modal>
+    </>
+  );
+}
+
+/** Staff-side password reset for members who forgot it (no email exists to send a reset link to). */
+export function AdminResetPassword({ userId, name }: { userId: string; name: string }) {
+  const [open, setOpen] = useState(false);
+  const [temp, setTemp] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const close = () => { setOpen(false); setTemp(null); };
+  return (
+    <>
+      <button type="button" className="btn-secondary" onClick={() => setOpen(true)}><KeyRound className="size-4" />パスワード再発行</button>
+      <Modal open={open} onClose={close} title="仮パスワードの発行">
+        {temp ? (
+          <div className="space-y-4 text-sm">
+            <p>{name} 様の仮パスワードを発行しました。<b>この画面を閉じると再表示できません。</b>本人確認のうえ、安全な方法でお伝えください。</p>
+            <CodeBox code={temp} />
+            <p className="text-slate-500">会員は次回ログイン時に新しいパスワードの設定を求められます。すべての端末からログアウト済みです。</p>
+            <div className="flex justify-end"><button className="btn-primary" onClick={close}>閉じる</button></div>
+          </div>
+        ) : (
+          <div className="space-y-4 text-sm">
+            <p className="text-slate-600">パスワードを忘れた会員のために仮パスワードを発行します。<b>電話・本人確認書類の照合などで本人であることを確認してから</b>実行してください。現在のパスワードは無効になり、操作は監査ログに記録されます。</p>
+            <div className="flex justify-end gap-2">
+              <button className="btn-secondary" onClick={close}>キャンセル</button>
+              <button className="btn-danger" disabled={pending} onClick={() => start(async () => {
+                const r = await adminResetPasswordAction(userId);
+                if (r.password) setTemp(r.password); else toast(r.error ?? 'エラー', 'err');
+              })}>{pending && <LoaderCircle className="size-4 animate-spin" />}仮パスワードを発行</button>
+            </div>
+          </div>
+        )}
       </Modal>
     </>
   );

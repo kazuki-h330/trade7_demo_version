@@ -284,4 +284,22 @@ ALTER TABLE files ADD COLUMN data bytea;
 ALTER TABLE files ALTER COLUMN path DROP NOT NULL;
 `,
   },
+  {
+    name: "004_login_id.sql",
+    sql: `-- Sign-in by login ID + password. Email is no longer collected or used; notifications are in-app only
+-- (the "emails" table now holds in-app notifications). Existing accounts get an ID from their email's local part.
+ALTER TABLE users ADD COLUMN login_id text;
+UPDATE users SET login_id = left(regexp_replace(lower(split_part(email, '@', 1)), '[^a-z0-9_-]', '_', 'g'), 24);
+UPDATE users SET login_id = login_id || '_' || lower(right(id, 4)) WHERE length(login_id) < 3;
+UPDATE users u SET login_id = u.login_id || '-' || lower(right(u.id, 4))
+  WHERE EXISTS (SELECT 1 FROM users o WHERE o.login_id = u.login_id AND o.id < u.id);
+ALTER TABLE users ALTER COLUMN login_id SET NOT NULL;
+ALTER TABLE users ADD CONSTRAINT users_login_id_key UNIQUE (login_id);
+ALTER TABLE users ADD CONSTRAINT users_login_id_format CHECK (login_id ~ '^[a-z0-9_-]{3,30}$');
+ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+ALTER TABLE users ADD COLUMN must_change_password boolean NOT NULL DEFAULT false;
+UPDATE users SET email_verified_at = coalesce(email_verified_at, now());
+UPDATE email_tokens SET used_at = coalesce(used_at, now());
+`,
+  },
 ];

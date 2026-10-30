@@ -3,7 +3,7 @@ import { calcFee, fail, newId, systemCtx, tradeBlockReason, type Ctx } from '../
 import { decryptCode } from '../crypto';
 import { getDb, type Queryable } from '../db';
 import { moveBalance } from '../ledger';
-import { queueMail } from '../mail';
+import { notify } from '../mail';
 import { inspectMessage } from '../moderation';
 import { getSettings } from '../settings';
 import { prepareImage, storeImage, type PreparedImage } from '../storage';
@@ -46,9 +46,9 @@ export async function purchase(ctx: Ctx, listingId: string, expectedVersion: num
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, now() + ($10 || ' minutes')::interval)`,
       [id, listingId, buyer.id, l.seller_id, l.face, l.rate_x10, l.price, fee, l.price - fee, String(s.confirmMinutes)]);
     await moveBalance(q, buyer.id, 'charge', -l.price, 'purchase', id);
-    await queueMail(q, { userId: buyer.id }, 'trade_open', '購入が成立しました',
+    await notify(q, { userId: buyer.id }, 'trade_open', '購入が成立しました',
       `${buyer.name} 様\n\nAppleギフトカード（額面 ${yen(l.face)}）を ${yen(l.price)} で購入しました。\n\n${s.confirmMinutes}分以内に取引画面でコードを確認し、「取引完了」または「エラー申請」を行ってください。\n期限内に操作がない場合は自動的に取引完了となります。\n\n取引ID：${id}`);
-    await queueMail(q, { userId: l.seller_id }, 'trade_open', '売買が成立しました', `出品 ${listingId}（額面 ${yen(l.face)}）が購入されました。\n買い手の受取確認後、売上に反映されます。\n\n取引ID：${id}`);
+    await notify(q, { userId: l.seller_id }, 'trade_open', '売買が成立しました', `出品 ${listingId}（額面 ${yen(l.face)}）が購入されました。\n買い手の受取確認後、売上に反映されます。\n\n取引ID：${id}`);
     await audit(q, ctx, 'trade.purchase', id, `${listingId} / ${yen(l.price)} / 価格ロック v${l.version}`);
     return id;
   });
@@ -70,8 +70,8 @@ async function complete(q: Queryable, ctx: Ctx, t: TradeRow, by: 'buyer' | 'auto
   await q.query("UPDATE trades SET status = 'completed', completed_at = now(), completed_by = $2 WHERE id = $1", [t.id, by]);
   await moveBalance(q, t.seller_id, 'sales', t.seller_net, 'sale', t.id, `手数料 ${yen(t.fee)} 控除後`);
   const how = { buyer: '買い手の受取確認', auto: '受取確認期限の経過による自動確定', admin: '運営の判断' }[by];
-  await queueMail(q, { userId: t.seller_id }, 'trade_complete', '取引が完了しました', `取引 ${t.id}（額面 ${yen(t.face)}）が完了しました（${how}）。\n売上 ${yen(t.seller_net)} を売上残高に反映しました。お支払いは運営より所定の日程で行います。${note ? `\n\n運営より：${note}` : ''}`);
-  await queueMail(q, { userId: t.buyer_id }, 'trade_complete', '取引が完了しました', `取引 ${t.id} が完了しました（${how}）。${note ? `\n\n運営より：${note}` : ''}`);
+  await notify(q, { userId: t.seller_id }, 'trade_complete', '取引が完了しました', `取引 ${t.id}（額面 ${yen(t.face)}）が完了しました（${how}）。\n売上 ${yen(t.seller_net)} を売上残高に反映しました。お支払いは運営より所定の日程で行います。${note ? `\n\n運営より：${note}` : ''}`);
+  await notify(q, { userId: t.buyer_id }, 'trade_complete', '取引が完了しました', `取引 ${t.id} が完了しました（${how}）。${note ? `\n\n運営より：${note}` : ''}`);
   await audit(q, ctx, 'trade.complete', t.id, how + (note ? ` / ${note}` : ''));
 }
 
@@ -116,9 +116,9 @@ export async function openDispute(ctx: Ctx, tradeId: string, reason: string, det
     await q.query("UPDATE trades SET status = 'disputed' WHERE id = $1", [tradeId]);
     await q.query('INSERT INTO disputes (trade_id, reason, detail) VALUES ($1,$2,$3)', [tradeId, reason, detail.slice(0, 2000)]);
     for (const img of imgs) await storeImage(q, img, actor.id, 'screenshot', tradeId);
-    await queueMail(q, { userId: t.seller_id }, 'dispute_open', 'エラー申請がありました', `取引 ${tradeId} について買い手からエラー申請がありました（${reason}）。\n取引と代金は保留されました。協議ページをご確認ください。`);
-    await queueMail(q, { userId: t.buyer_id }, 'dispute_open', 'エラー申請を受け付けました', `取引 ${tradeId} のエラー申請を受け付けました。取引と代金は保留されています。\n協議ページで状況をお知らせください。`);
-    await queueMail(q, 'ops', 'dispute_open', 'エラー申請', `取引 ${tradeId}：${reason}（添付 ${imgs.length} 枚）`);
+    await notify(q, { userId: t.seller_id }, 'dispute_open', 'エラー申請がありました', `取引 ${tradeId} について買い手からエラー申請がありました（${reason}）。\n取引と代金は保留されました。協議ページをご確認ください。`);
+    await notify(q, { userId: t.buyer_id }, 'dispute_open', 'エラー申請を受け付けました', `取引 ${tradeId} のエラー申請を受け付けました。取引と代金は保留されています。\n協議ページで状況をお知らせください。`);
+    await notify(q, 'ops', 'dispute_open', 'エラー申請', `取引 ${tradeId}：${reason}（添付 ${imgs.length} 枚）`);
     await audit(q, ctx, 'dispute.open', tradeId, `${reason} / 添付${imgs.length}枚`);
   });
 }
@@ -152,8 +152,8 @@ export async function postDisputeMessage(ctx: Ctx, tradeId: string, bodyRaw: str
     }
     await q.query('INSERT INTO dispute_messages (id, trade_id, user_id, role, body, flagged) VALUES ($1,$2,$3,$4,$5,$6)', [newId('MSG'), tradeId, actor.id, role, body, insp.action === 'flag']);
     if (insp.action === 'pass') await audit(q, ctx, 'dispute.message', tradeId, body.slice(0, 60));
-    const notify = role === 'admin' ? [t.buyer_id, t.seller_id] : [role === 'buyer' ? t.seller_id : t.buyer_id];
-    for (const uid of notify) await queueMail(q, { userId: uid }, 'dispute_message', `協議ページに${role === 'admin' ? '運営から' : '新しい'}メッセージがあります`, `取引 ${tradeId} の協議ページをご確認ください。`);
+    const recipients = role === 'admin' ? [t.buyer_id, t.seller_id] : [role === 'buyer' ? t.seller_id : t.buyer_id];
+    for (const uid of recipients) await notify(q, { userId: uid }, 'dispute_message', `協議ページに${role === 'admin' ? '運営から' : '新しい'}メッセージがあります`, `取引 ${tradeId} の協議ページをご確認ください。`);
     return { status: insp.action === 'flag' ? 'flagged' : 'posted', reasons };
   });
 }
@@ -173,8 +173,8 @@ export async function resolveDispute(ctx: Ctx, tradeId: string, decision: 'compl
     await q.query("UPDATE trades SET status = 'cancelled', completed_at = now(), completed_by = 'admin' WHERE id = $1", [tradeId]);
     await q.query("UPDATE listings SET status = 'cancelled', version = version + 1 WHERE id = $1", [t.listing_id]);
     await moveBalance(q, t.buyer_id, 'charge', t.price, 'refund', tradeId, '取引中止による購入代金の返還');
-    await queueMail(q, { userId: t.buyer_id }, 'trade_cancel', '取引中止のお知らせ', `取引 ${tradeId} は運営の判断により取引中止となりました。\n購入代金 ${yen(t.price)} をチャージ残高へ戻しました。\n\n運営より：${note}`);
-    await queueMail(q, { userId: t.seller_id }, 'trade_cancel', '取引中止のお知らせ', `取引 ${tradeId} は運営の判断により取引中止となりました。売上は計上されません。\n\n運営より：${note}`);
+    await notify(q, { userId: t.buyer_id }, 'trade_cancel', '取引中止のお知らせ', `取引 ${tradeId} は運営の判断により取引中止となりました。\n購入代金 ${yen(t.price)} をチャージ残高へ戻しました。\n\n運営より：${note}`);
+    await notify(q, { userId: t.seller_id }, 'trade_cancel', '取引中止のお知らせ', `取引 ${tradeId} は運営の判断により取引中止となりました。売上は計上されません。\n\n運営より：${note}`);
     await audit(q, ctx, 'trade.cancel', tradeId, note);
   });
 }
