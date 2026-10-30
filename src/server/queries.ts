@@ -129,5 +129,5 @@ export const payoutsList = () => q<{ id: string; status: string; created_at: Dat
   `SELECT p.*, count(i.seller_id)::int AS sellers, coalesce(sum(i.amount),0)::int AS total FROM payouts p LEFT JOIN payout_items i ON i.payout_id = p.id GROUP BY p.id ORDER BY p.created_at DESC`);
 export const detections = () => q<{ id: string; trade_id: string; user_id: string; user_name: string; body: string; rule_hits: string[]; ai: { model: string; verdict: string; reasons: string[]; score: number; error?: string } | null; action: string; reviewed_at: Date | null; created_at: Date }>(
   'SELECT d.*, u.name AS user_name FROM detections d JOIN users u ON u.id = d.user_id ORDER BY d.created_at DESC LIMIT 300');
-export const fileRow = (id: string) => one<{ id: string; owner_id: string; kind: string; trade_id: string | null; path: string; mime: string }>('SELECT * FROM files WHERE id = $1', [id]);
+export const fileRow = (id: string) => one<{ id: string; owner_id: string; kind: string; trade_id: string | null; mime: string; data: Uint8Array }>('SELECT id, owner_id, kind, trade_id, mime, data FROM files WHERE id = $1', [id]);
 export const tradeParties = (id: string) => one<{ buyer_id: string; seller_id: string }>('SELECT buyer_id, seller_id FROM trades WHERE id = $1', [id]);

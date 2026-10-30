@@ -1,5 +1,5 @@
 import { BadgeCheck, IdCard, Landmark, UserRound } from 'lucide-react';
-import { ActionForm, SubmitButton } from '@/components/client';
+import { ActionForm, ImageInput, SubmitButton } from '@/components/client';
 import { Card, DL, Field, Notice, PageHeader, Status, Table } from '@/components/ui';
 import { fmtDate } from '@/lib/format';
 import { resendVerificationAction, verifyEmailAction } from '@/server/actions/auth';
@@ -58,7 +58,7 @@ export default async function Account({ searchParams }: { searchParams: Promise<
               <ActionForm action={submitKycAction} className="space-y-4">
                 <Field label="書類の種類"><select name="docType" className="input">{DOC_TYPES.map(d => <option key={d}>{d}</option>)}</select></Field>
                 <Field label="身分証画像（PNG / JPEG / WebP・5MBまで）" hint="氏名・生年月日・住所・有効期限が鮮明に写るように撮影してください。画像は再エンコードされ、位置情報などのメタデータは削除されます。">
-                  <input type="file" name="file" required accept="image/png,image/jpeg,image/webp,image/heic" className="input file:mr-3 file:rounded-lg file:border-0 file:bg-violet-100 file:px-3 file:py-1 file:text-violet-700" />
+                  <ImageInput name="file" required max={1} />
                 </Field>
                 <SubmitButton pendingText="アップロード中…">提出する</SubmitButton>
               </ActionForm>

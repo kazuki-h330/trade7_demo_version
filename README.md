@@ -91,7 +91,7 @@ Tip for demos: set **設定 › 受取確認時間** to 1 minute to show auto-co
 ## Project layout
 
 ```
-db/migrations/        SQL schema (runs automatically on start)
+src/server/migrations.ts  SQL schema migrations (run automatically on start)
 src/server/           core: db adapter, crypto, audit, ledger, mail, storage, moderation, auth
 src/server/services/  business rules (accounts, listings, trades, money, admin)
 src/server/actions/   Server Actions (thin wrappers around services)
@@ -102,13 +102,38 @@ src/components/       UI kit, client components, trade detail
 tests/                integration tests (vitest + in-memory Postgres)
 ```
 
-## Production deployment
+## Deploy to Vercel
+
+The app runs on Vercel as-is. It needs a Postgres database and a few environment variables; without them, signup and login fail (the login page shows a red 設定エラー banner explaining what is missing).
+
+1. **Database:** Vercel project → **Storage** → **Create Database** → **Neon** (free tier) → connect it to this project. This sets `DATABASE_URL` automatically. Tables are created on the first request.
+2. **Environment variables** (Settings → Environment Variables, Production):
+
+   | Name | Value |
+   |---|---|
+   | `CODE_ENCRYPTION_KEY` | 32 random bytes, base64. Generate: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. **Never change it after data exists**, or stored gift codes can't be decrypted. |
+   | `CODE_HASH_PEPPER` | Another value generated the same way |
+   | `CRON_SECRET` | Any long random string (used by the daily Vercel Cron in `vercel.json`) |
+   | `APP_URL` | Your deployment URL, e.g. `https://trade7-xxx.vercel.app` (used in password-reset links) |
+   | `AUTO_SEED` | `true` for a client demo (creates the test accounts); remove it for real production |
+   | `GEMINI_API_KEY`, `SMTP_URL`, `MAIL_FROM`, `OPS_EMAIL` | Optional. Without them, AI moderation falls back to local rules and emails are only logged in the app |
+
+3. **Redeploy** (Deployments → ⋯ → Redeploy) so the variables take effect.
+4. Open `https://<your-app>/api/health`. It should show `"ok": true` and `"persistent": true`.
+
+How it adapts to serverless:
+- Uploaded images are stored in Postgres, because Vercel has no persistent disk.
+- The 30-minute auto-confirm runs whenever pages are viewed, plus a daily Vercel Cron.
+- Photos are resized in the browser before upload, to stay under Vercel's 4.5 MB request limit.
+- Migrations and seeding run under a database lock, so simultaneous cold starts can't collide.
+
+## Production deployment (own server)
 
 1. Provision PostgreSQL 15+ and set `DATABASE_URL`. Migrations apply on start.
 2. Generate `CODE_ENCRYPTION_KEY` and `CODE_HASH_PEPPER` (32 random bytes each, base64) and keep them in a secret manager. **Losing the key makes stored codes unreadable.**
 3. Set `SMTP_URL`, `MAIL_FROM`, `OPS_EMAIL`, `GEMINI_API_KEY`, `APP_URL` and `CRON_SECRET`.
 4. Make sure `AUTO_SEED` is **unset**.
-5. Put `STORAGE_DIR` on persistent, backed-up storage, or replace `storage.ts` with S3/GCS (the interface is small).
+5. Uploaded images are stored in the database (`files.data`). At larger scale, move them to S3/GCS; only `storage.ts` and the file route change.
 6. Use `docker compose up --build` to try a production-like stack (Postgres + Mailpit + the app), or deploy the `Dockerfile`.
 7. Run behind HTTPS. A reverse proxy should set `X-Forwarded-For`, which the audit log records.
 

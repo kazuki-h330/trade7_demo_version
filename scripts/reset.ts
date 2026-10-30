@@ -6,7 +6,7 @@ if (process.env.DATABASE_URL) {
   console.error('DATABASE_URL is set — refusing to reset. This script only clears the local PGlite dev database.');
   process.exit(1);
 }
-for (const p of ['.data', process.env.STORAGE_DIR ?? 'storage']) {
+for (const p of ['.data', 'storage']) {
   fs.rmSync(path.resolve(p), { recursive: true, force: true });
   console.log('removed', p);
 }

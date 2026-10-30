@@ -1,4 +1,12 @@
--- trade7 initial schema (PostgreSQL 15+ / PGlite)
+/**
+ * Database migrations, applied in order on startup (see migrate() in db.ts).
+ * Kept in code rather than .sql files so they are always bundled with serverless deployments.
+ * Append new migrations; never edit one that has shipped.
+ */
+export const MIGRATIONS: { name: string; sql: string }[] = [
+  {
+    name: "001_init.sql",
+    sql: `-- trade7 initial schema (PostgreSQL 15+ / PGlite)
 -- Money is stored as integer yen. Rates are stored as tenths of a percent (88.5% = 885).
 
 CREATE TABLE users (
@@ -260,3 +268,20 @@ CREATE TABLE settings (
   value      jsonb NOT NULL,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+`,
+  },
+  {
+    name: "002_password_reset.sql",
+    sql: `-- One table for all emailed one-time tokens, distinguished by purpose.
+ALTER TABLE email_tokens ADD COLUMN purpose text NOT NULL DEFAULT 'verify' CHECK (purpose IN ('verify', 'reset'));
+CREATE INDEX email_tokens_lookup_idx ON email_tokens(code_hash) WHERE used_at IS NULL;
+`,
+  },
+  {
+    name: "003_files_in_db.sql",
+    sql: `-- Store uploaded images in the database so the app runs on serverless hosts (no persistent disk).
+ALTER TABLE files ADD COLUMN data bytea;
+ALTER TABLE files ALTER COLUMN path DROP NOT NULL;
+`,
+  },
+];

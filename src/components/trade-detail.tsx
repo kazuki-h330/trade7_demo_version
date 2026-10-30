@@ -1,6 +1,6 @@
 import { CircleCheck, ImagePlus, MessageSquareWarning, ShieldAlert, Timer } from 'lucide-react';
 import Link from 'next/link';
-import { ActionForm, AdminDecrypt, AutoRefresh, Countdown, ModalButton, RevealCode, SubmitButton } from '@/components/client';
+import { ActionForm, AdminDecrypt, AutoRefresh, Countdown, ImageInput, ModalButton, RevealCode, SubmitButton } from '@/components/client';
 import { Badge, Card, DL, Field, GiftArt, Notice, Status, Table } from '@/components/ui';
 import { alias, fmtDate, maskCode, pct, yen } from '@/lib/format';
 import { resolveDisputeAction } from '@/server/actions/admin';
@@ -75,7 +75,7 @@ export async function TradeDetail({ user, data }: { user: UserRow; data: Detail 
                     <Field label="申請理由"><select name="reason" className="input">{DISPUTE_REASONS.map(r => <option key={r}>{r}</option>)}</select></Field>
                     <Field label="詳細"><textarea name="detail" rows={3} maxLength={2000} className="input" placeholder="残高照会の結果など、状況を具体的にご記入ください" /></Field>
                     <Field label="画面のスクリーンショット（最大3枚・各5MBまで）" hint="残高照会画面などを添付してください。当事者と運営のみが閲覧できます。">
-                      <input type="file" name="shots" multiple accept="image/png,image/jpeg,image/webp" className="input file:mr-3 file:rounded-lg file:border-0 file:bg-violet-100 file:px-3 file:py-1 file:text-violet-700" />
+                      <ImageInput name="shots" multiple max={3} />
                     </Field>
                     <Notice tone="amber">申請すると取引と代金は保留（フリーズ）され、当事者と運営のみが参加できる協議ページが作成されます。</Notice>
                     <div className="flex justify-end"><SubmitButton className="btn-danger" pendingText="送信中…"><ImagePlus className="size-4" />申請する</SubmitButton></div>

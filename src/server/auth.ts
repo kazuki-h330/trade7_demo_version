@@ -1,5 +1,8 @@
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { after } from 'next/server';
+import { flushOutbox } from './mail';
+import { autoConfirmDue } from './services/trades';
 import { cache } from 'react';
 import { actorOf, type Ctx, type UserRow } from './core';
 import { sha256 } from './crypto';
@@ -13,10 +16,28 @@ export async function requestMeta() {
   return { ip, ua: h.get('user-agent') ?? '' };
 }
 
+const g = globalThis as unknown as { __trade7LastSweep?: number };
+
+/**
+ * Serverless hosts (Vercel) have no background timer, so expired 30-minute windows are also
+ * confirmed lazily on page views — at most every 10 s per instance. /api/cron does the same.
+ */
+async function sweepDueTrades() {
+  const now = Date.now();
+  if (now - (g.__trade7LastSweep ?? 0) < 10_000) return;
+  g.__trade7LastSweep = now;
+  try {
+    if (await autoConfirmDue()) after(() => flushOutbox());
+  } catch (e) {
+    console.error('[sweep]', e);
+  }
+}
+
 export const getCurrentUser = cache(async (): Promise<UserRow | null> => {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
   const db = await getDb();
+  await sweepDueTrades();
   const { rows } = await db.query<UserRow>(
     'SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id = $1 AND s.expires_at > now()', [sha256(token)]);
   const u = rows[0];

@@ -1,15 +1,18 @@
 import Link from 'next/link';
 import { ActionForm, SubmitButton } from '@/components/client';
-import { Field } from '@/components/ui';
+import { Field, Notice } from '@/components/ui';
 import { registerAction } from '@/server/actions/auth';
+import { configProblems } from '@/server/config';
 
 export const metadata = { title: '新規会員登録' };
+export const dynamic = 'force-dynamic';
 
 export default function RegisterPage() {
   return (
     <div>
       <h1 className="text-3xl font-extrabold">新規会員登録</h1>
       <p className="mt-1 text-sm text-slate-500">登録後、メール認証と本人確認を行います</p>
+      {configProblems().map(p => <div key={p.text} className="mt-6"><Notice tone="red"><b>設定エラー：</b>{p.text}</Notice></div>)}
       <ActionForm action={registerAction} reset={false} className="mt-8 space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <Field label="氏名"><input name="name" required maxLength={50} placeholder="山田 太郎" className="input" autoComplete="name" /></Field>

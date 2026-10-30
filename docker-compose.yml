@@ -25,10 +25,8 @@ services:
       SMTP_URL: smtp://mail:1025
       APP_URL: http://localhost:3000
     ports: ["3000:3000"]
-    volumes: [storage:/data/storage]
     depends_on:
       db: { condition: service_healthy }
 
 volumes:
   pgdata:
-  storage:

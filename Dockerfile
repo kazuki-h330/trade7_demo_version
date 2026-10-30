@@ -13,12 +13,11 @@ RUN npm run build && npm prune --omit=dev
 
 FROM node:22-bookworm-slim
 WORKDIR /app
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 STORAGE_DIR=/data/storage
-RUN useradd --system --uid 1001 app && mkdir -p /data/storage && chown -R app /data
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000
+RUN useradd --system --uid 1001 app
 COPY --from=build --chown=app /app/.next ./.next
 COPY --from=build --chown=app /app/node_modules ./node_modules
 COPY --from=build --chown=app /app/package.json /app/next.config.ts ./
-COPY --from=build --chown=app /app/db ./db
 COPY --from=build --chown=app /app/public ./public
 USER app
 EXPOSE 3000

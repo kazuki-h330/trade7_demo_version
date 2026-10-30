@@ -1,12 +1,15 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import sharp from 'sharp';
 import { fail, newId } from './core';
 import { sha256 } from './crypto';
 import type { Queryable } from './db';
 
+/**
+ * Uploaded images (KYC documents, dispute screenshots) are stored in the database (bytea).
+ * After re-encoding they are small (~100–400 KB), and this works on serverless hosts that have no
+ * persistent disk. To move to object storage later, change only storeImage() and the file route.
+ */
+
 const MAX_BYTES = 5 * 1024 * 1024;
-const root = () => path.resolve(process.env.STORAGE_DIR ?? path.join(process.cwd(), 'storage'));
 
 export type PreparedImage = { buf: Buffer; sha: string };
 
@@ -33,17 +36,7 @@ export async function prepareImage(file: File | null | undefined): Promise<Prepa
 
 export async function storeImage(q: Queryable, img: PreparedImage, ownerId: string, kind: 'kyc' | 'screenshot', tradeId?: string) {
   const id = newId('FILE');
-  const d = new Date();
-  const rel = path.join(kind, `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`, `${id}.jpg`);
-  await fs.mkdir(path.join(root(), path.dirname(rel)), { recursive: true });
-  await fs.writeFile(path.join(root(), rel), img.buf, { mode: 0o600 });
-  await q.query('INSERT INTO files (id, owner_id, kind, trade_id, path, mime, size, sha256) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-    [id, ownerId, kind, tradeId ?? null, rel, 'image/jpeg', img.buf.length, img.sha]);
+  await q.query('INSERT INTO files (id, owner_id, kind, trade_id, mime, size, sha256, data) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+    [id, ownerId, kind, tradeId ?? null, 'image/jpeg', img.buf.length, img.sha, img.buf]);
   return id;
-}
-
-export async function readStored(rel: string) {
-  const full = path.resolve(root(), rel);
-  if (!full.startsWith(root())) fail('invalid path');
-  return fs.readFile(full);
 }

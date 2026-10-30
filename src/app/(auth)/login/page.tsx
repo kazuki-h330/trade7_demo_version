@@ -4,6 +4,7 @@ import { ActionForm, SubmitButton } from '@/components/client';
 import { Field, Notice } from '@/components/ui';
 import { loginAction } from '@/server/actions/auth';
 import { getCurrentUser } from '@/server/auth';
+import { configProblems } from '@/server/config';
 
 export const metadata = { title: 'ログイン' };
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ const DEMO = [
 ];
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; reset?: string }> }) {
-  const u = await getCurrentUser();
+  const u = await getCurrentUser().catch(e => { console.error('[login]', e); return null; }); // still render the setup banner if the DB is down
   if (u) redirect(u.role === 'admin' ? '/admin' : '/market');
   const { next = '', reset } = await searchParams;
   const showDemo = process.env.AUTO_SEED === 'true';
@@ -25,6 +26,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     <div>
       <h1 className="text-3xl font-extrabold">おかえりなさい</h1>
       <p className="mt-1 text-sm text-slate-500">アカウントにログインしてください</p>
+      {configProblems().map(p => <div key={p.text} className="mt-6"><Notice tone="red"><b>設定エラー：</b>{p.text}</Notice></div>)}
       {reset && <div className="mt-6"><Notice tone="green">パスワードを変更しました。新しいパスワードでログインしてください。</Notice></div>}
       <ActionForm action={loginAction} reset={false} hidden={{ next }} className="mt-8 space-y-4">
         <Field label="メールアドレス"><input name="email" type="email" required autoComplete="email" className="input" /></Field>

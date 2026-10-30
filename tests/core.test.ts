@@ -1,6 +1,3 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { verifyAuditChain } from '@/server/audit';
@@ -23,7 +20,6 @@ const user = async (email: string) => (await db.query<UserRow>('SELECT * FROM us
 const activeListing = async () => (await db.query<{ id: string; version: number; price: number }>("SELECT id, version, price FROM listings WHERE status = 'active' ORDER BY face LIMIT 1")).rows[0];
 
 beforeAll(async () => {
-  process.env.STORAGE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 't7-'));
   process.env.CODE_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
   process.env.GEMINI_API_KEY = '';
   db = await createPglite();
@@ -79,6 +75,9 @@ describe('dispute flow', () => {
     expect((await postDisputeMessage(buyerCtx, tradeId, '直接やり取りしたいので連絡先ください')).status).toBe('blocked');
     expect((await user('buyer2@trade7.example')).status).toBe('warned'); // auto-warning after 3 blocks
     expect((await postDisputeMessage(buyerCtx, tradeId, '残高照会で0円と表示されました')).status).toBe('posted');
+    const { rows: shots } = await db.query<{ data: Uint8Array }>("SELECT data FROM files WHERE trade_id = $1 AND kind = 'screenshot'", [tradeId]);
+    expect(shots).toHaveLength(1);
+    expect((await sharp(Buffer.from(shots[0].data)).metadata()).format).toBe('jpeg'); // stored in the DB, re-encoded
 
     // completed trades never auto-confirm while disputed
     await db.query("UPDATE trades SET deadline = now() - interval '1 minute' WHERE id = $1", [tradeId]);

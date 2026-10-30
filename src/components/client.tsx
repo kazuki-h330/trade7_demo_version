@@ -234,6 +234,46 @@ export function MailItem({ id, unread, subject, meta, body }: { id: string; unre
   );
 }
 
+async function shrinkImage(f: File, max = 1800): Promise<File> {
+  if (!/^image\/(png|jpeg|webp)$/.test(f.type)) return f; // HEIC etc.: let the server handle it
+  try {
+    const bmp = await createImageBitmap(f);
+    const s = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s);
+    c.getContext('2d')!.drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise<Blob | null>(r => c.toBlob(r, 'image/jpeg', 0.85));
+    return blob && blob.size < f.size ? new File([blob], f.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : f;
+  } catch {
+    return f;
+  }
+}
+
+/**
+ * File input that downsizes photos in the browser before upload. Phone photos are often 5–10 MB,
+ * and serverless hosts cap request bodies (Vercel: 4.5 MB). The server re-encodes them again regardless.
+ */
+export function ImageInput({ name, multiple, required, max = 3 }: { name: string; multiple?: boolean; required?: boolean; max?: number }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div>
+      <input type="file" name={name} multiple={multiple} required={required} accept="image/png,image/jpeg,image/webp,image/heic"
+        className="input file:mr-3 file:rounded-lg file:border-0 file:bg-violet-100 file:px-3 file:py-1 file:text-violet-700"
+        onChange={async e => {
+          const input = e.currentTarget;
+          const picked = [...(input.files ?? [])];
+          if (picked.length > max) toast(`画像は${max}枚までです（先頭${max}枚を使用します）`, 'err');
+          setBusy(true);
+          const dt = new DataTransfer();
+          for (const f of picked.slice(0, max)) dt.items.add(await shrinkImage(f));
+          input.files = dt.files;
+          setBusy(false);
+        }} />
+      {busy && <span className="mt-1 flex items-center gap-1 text-xs text-violet-600"><LoaderCircle className="size-3 animate-spin" />画像を最適化しています…</span>}
+    </div>
+  );
+}
+
 export function FillDemoCode() {
   return (
     <button type="button" className="btn-ghost btn-sm" onClick={e => {

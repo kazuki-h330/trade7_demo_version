@@ -1,5 +1,6 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { after } from 'next/server';
 import { ZodError } from 'zod';
 import { getCtx } from './auth';
 import { AppError, type Ctx } from './core';
@@ -30,7 +31,8 @@ export function action(fn: (ctx: Ctx, fd: FormData) => Promise<Result>) {
       return { error: '処理中にエラーが発生しました。時間をおいて再度お試しください', ts: Date.now() };
     }
     revalidatePath('/', 'layout');
-    void flushOutbox().catch(err => console.error('[mail]', err));
+    // after(): runs once the response is sent and keeps a serverless function alive until mail is delivered
+    after(() => flushOutbox().catch(err => console.error('[mail]', err)));
     if (to) redirect(to);
     return out;
   };

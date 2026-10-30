@@ -2,7 +2,7 @@ import sharp from 'sharp';
 import { audit } from './audit';
 import { calcFee, calcPrice, newId, type Ctx } from './core';
 import { codeFingerprint, encryptCode, hashPassword, sha256 } from './crypto';
-import type { Database, Queryable } from './db';
+import type { Database } from './db';
 import { moveBalance } from './ledger';
 import { queueMail } from './mail';
 import { DEFAULT_SETTINGS, saveSettings } from './settings';
@@ -23,16 +23,17 @@ async function sampleIdImage(name: string) {
   return { buf, sha: sha256(buf) };
 }
 
-export async function seedIfEmpty(db: Database) {
-  const { rows } = await db.query<{ n: number }>('SELECT count(*)::int AS n FROM users');
-  if (rows[0].n > 0) return false;
-  await seed(db);
-  return true;
-}
+export const seedIfEmpty = (db: Database) => seed(db);
 
+/** Seeds only an empty database; the advisory lock makes concurrent cold starts seed exactly once. */
 export async function seed(db: Database) {
+  const { rows: existing } = await db.query<{ n: number }>('SELECT count(*)::int AS n FROM users');
+  if (existing[0].n > 0) return false;
   const pw = { admin: await hashPassword('admin1234'), demo: await hashPassword('demo1234') };
-  await db.tx(async q => {
+  return db.tx(async q => {
+    await q.query('SELECT pg_advisory_xact_lock(9001)');
+    const { rows } = await q.query<{ n: number }>('SELECT count(*)::int AS n FROM users');
+    if (rows[0].n > 0) return false;
     await saveSettings(q, DEFAULT_SETTINGS);
     const ctx: Ctx = { actor: null, ip: '127.0.0.1', ua: 'seed' };
     const mk = async (o: { email: string; name: string; kana: string; role?: 'admin'; kyc?: 'approved' | 'pending' | 'none'; seller?: 'approved' | 'pending' | 'none'; bank?: [string, string, string]; verified?: boolean }) => {
@@ -91,6 +92,6 @@ export async function seed(db: Database) {
     await audit(q, { ...ctx, actor: buyer }, 'trade.complete', tid, '買い手の受取確認');
     await queueMail(q, { userId: newbie.id }, 'kyc_submit', '本人確認書類を受け付けました', `${newbie.name} 様\n\n本人確認書類を受け付けました。`);
     await audit(q, ctx, 'system.seed', 'database', 'デモデータを作成');
-    void (q as Queryable);
+    return true;
   });
 }
